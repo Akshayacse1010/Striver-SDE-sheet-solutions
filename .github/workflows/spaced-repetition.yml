@@ -1,0 +1,85 @@
+name: Spaced Repetition Manager
+on:
+  schedule:
+    - cron: '30 3 * * *' # Runs daily at 9:00 AM IST
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  manage-reviews:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            const cycles = {
+              'cycle:1': 1,
+              'cycle:3': 3,
+              'cycle:7': 7,
+              'cycle:30': 30
+            };
+
+            const nextCycle = {
+              'cycle:1': 'cycle:3',
+              'cycle:3': 'cycle:7',
+              'cycle:7': 'cycle:30',
+              'cycle:30': 'completed'
+            };
+
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              labels: Object.keys(cycles).join(',')
+            });
+
+            const now = new Date();
+
+            for (const issue of issues.data) {
+              const closedAt = new Date(issue.closed_at);
+              const currentLabel = issue.labels.find(l => cycles[l.name]).name;
+              const daysWait = cycles[currentLabel];
+              
+              const diffTime = Math.abs(now - closedAt);
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+              if (diffDays >= daysWait) {
+                const newLabel = nextCycle[currentLabel];
+                
+                if (newLabel === 'completed') {
+                   await github.rest.issues.addLabels({
+                     owner: context.repo.owner,
+                     repo: context.repo.repo,
+                     issue_number: issue.number,
+                     labels: ['mastered']
+                   });
+                   await github.rest.issues.removeLabel({
+                     owner: context.repo.owner,
+                     repo: context.repo.repo,
+                     issue_number: issue.number,
+                     name: currentLabel
+                   });
+                } else {
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    state: 'open',
+                    labels: [newLabel]
+                  });
+                  
+                  await github.rest.issues.removeLabel({
+                     owner: context.repo.owner,
+                     repo: context.repo.repo,
+                     issue_number: issue.number,
+                     name: currentLabel
+                   });
+                   
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    body: `🔔 @${issue.user.login} **Spaced Repetition Alert!** \n\nIt has been **${daysWait} days**. The algorithm has reopened this for your review.\n(Promoted: ${currentLabel} → ${newLabel})`
+                  });
+                }
+              }
+            }

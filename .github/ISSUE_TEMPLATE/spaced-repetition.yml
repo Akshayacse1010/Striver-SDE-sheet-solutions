@@ -1,0 +1,47 @@
+name: 🧠 Spaced Repetition Entry
+description: Track a problem for automated review
+title: "[Problem Name]: "
+labels: ["cycle:1"]
+body:
+  - type: input
+    id: problem_link
+    attributes:
+      label: Problem Link
+      description: URL to LeetCode/Striver problem
+      placeholder: https://leetcode.com/problems/...
+    validations:
+      required: false
+
+  - type: input
+    id: solution_link
+    attributes:
+      label: My Solution Link
+      description: Link to your .cpp file in this repo
+      placeholder: https://github.com/akshayacse1010/striver-sde-sheet-solutions/blob/main/Arrays/count-inversion.cpp
+    validations:
+      required: false
+
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: How did it go? (Traffic Light)
+      description: This determines your review schedule.
+      options:
+        - 🟢 Green (Easy / Obvious) -> Archive immediately
+        - 🟡 Yellow (Struggled / Needed Hint) -> Review in 3 days
+        - 🔴 Red (Failed / New Pattern) -> Review in 1 day
+    validations:
+      required: true
+
+  - type: textarea
+    id: snapshot
+    attributes:
+      label: 📸 The "Snapshot" (Crucial)
+      description: |
+        ONE sentence on why you struggled or the key pattern. 
+        Examples:
+        - "Used DFS but BFS was needed for shortest path."
+        - "Forgot that mid calculation can overflow."
+      placeholder: "I failed because..."
+    validations:
+      required: true
