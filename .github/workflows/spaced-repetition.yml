@@ -4,6 +4,9 @@ on:
     - cron: '30 3 * * *' # Runs daily at 9:00 AM IST
   workflow_dispatch: # Allows manual triggering
 
+permissions:
+  issues: write  # <--- CRITICAL: Gives the bot permission to comment/reopen
+
 jobs:
   manage-reviews:
     runs-on: ubuntu-latest
@@ -25,20 +28,26 @@ jobs:
               'cycle:30': 'completed'
             };
 
+            // FIX: Fetch ALL closed issues (up to 100) and filter in the loop
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'closed',
-              labels: Object.keys(cycles).join(',')
+              per_page: 100
             });
 
             const now = new Date();
 
             for (const issue of issues.data) {
-              const closedAt = new Date(issue.closed_at);
-              const currentLabel = issue.labels.find(l => cycles[l.name]).name;
+              // Skip issues that don't have a cycle label
+              const currentLabelObj = issue.labels.find(l => cycles[l.name]);
+              if (!currentLabelObj) continue;
+
+              const currentLabel = currentLabelObj.name;
               const daysWait = cycles[currentLabel];
+              const closedAt = new Date(issue.closed_at);
               
+              // Calculate days passed (Math.ceil ensures "next morning" counts as 1 day)
               const diffTime = Math.abs(now - closedAt);
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
 
@@ -59,6 +68,7 @@ jobs:
                      name: currentLabel
                    });
                 } else {
+                  // Re-open the issue
                   await github.rest.issues.update({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
@@ -67,6 +77,7 @@ jobs:
                     labels: [newLabel]
                   });
                   
+                  // Remove old label
                   await github.rest.issues.removeLabel({
                      owner: context.repo.owner,
                      repo: context.repo.repo,
@@ -74,11 +85,12 @@ jobs:
                      name: currentLabel
                    });
                    
+                  // COMMENT WITH MENTION
                   await github.rest.issues.createComment({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: issue.number,
-                    body: `🔔 @${issue.user.login} **Spaced Repetition Alert!** \n\nIt has been **${daysWait} days**. The algorithm has reopened this for your review.\n(Promoted: ${currentLabel} → ${newLabel})`
+                    body: `🔔 @${issue.user.login} **Spaced Repetition Alert!** \n\nIt has been **${daysWait} days** since you solved this. The algorithm has reopened it for review.\n\n(Promoted: ${currentLabel} → ${newLabel})`
                   });
                 }
               }
